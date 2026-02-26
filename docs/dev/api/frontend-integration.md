@@ -81,3 +81,9 @@ curl -sS -X POST \
 - `403` — токен валиден, но действие запрещено.
 - `413` — payload слишком большой.
 - `504` — timeout операции.
+
+## Smoke-проверка
+
+Пошаговый smoke-checklist для React команды:
+
+- `docs/dev/api/smoke-runbook-react.md`
