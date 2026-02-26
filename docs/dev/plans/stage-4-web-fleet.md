@@ -12,6 +12,8 @@
   - auth через `X-Subject-ID` в middleware;
   - сквозной `request_id` через `X-Request-ID` (или генерация сервером);
   - общий request-timeout middleware и body-size limit middleware.
+- Добавлен OpenAPI-контракт v1: `docs/dev/api/openapi-v1.yaml`.
+- Добавлены contract tests для web API (`TestHTTPContract*`).
 
 ## 2. Scope
 

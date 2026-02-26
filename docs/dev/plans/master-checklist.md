@@ -10,6 +10,8 @@
 - [x] Добавлен аудит событий в messaging-пайплайн (status: ok/error/denied/rate_limited).
 - [x] Добавлены базовые интеграционные и unit-тесты для transport-пайплайна.
 - [x] Начата реализация Stage 4: добавлен базовый Web transport (`/v1/health`, execute, latest metrics, audit).
+- [x] Усилен Web transport middleware-слой (auth/request_id/timeout/body limit).
+- [x] Добавлен OpenAPI v1 и базовые HTTP contract tests.
 
 ## 1. Глобальные quality gates (каждый этап)
 
