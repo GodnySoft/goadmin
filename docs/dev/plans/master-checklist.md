@@ -46,7 +46,7 @@
 ## 5. Release readiness
 
 - [x] Release notes и changelog обновлены.
-- [ ] Runbook deploy/rollback актуализирован.
+- [x] Runbook deploy/rollback актуализирован.
 - [ ] Проведен smoke-test после деплоя.
 - [ ] Подписан и верифицирован бинарный артефакт.
 

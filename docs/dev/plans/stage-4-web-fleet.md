@@ -40,6 +40,7 @@
 - Документация интеграции frontend/backend (`docs/dev/api/frontend-integration.md`).
 - Smoke-runbook для React команды (`docs/dev/api/smoke-runbook-react.md`).
 - Production-пример конфига web auth/cors (`configs/config.prod.example.yaml`).
+- Deploy/Rollback runbook для web API (`docs/dev/instr/web-api-deploy-rollback.md`).
 - Contract tests для совместимости API.
 
 ## 5. Backlog этапа

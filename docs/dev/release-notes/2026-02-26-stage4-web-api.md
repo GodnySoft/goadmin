@@ -33,6 +33,8 @@
   - `configs/config.prod.example.yaml`
 - Smoke runbook для React команды:
   - `docs/dev/api/smoke-runbook-react.md`
+- Deploy/Rollback runbook для web API:
+  - `docs/dev/instr/web-api-deploy-rollback.md`
 
 ## Quality status
 
