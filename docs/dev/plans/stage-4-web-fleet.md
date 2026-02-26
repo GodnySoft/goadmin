@@ -41,6 +41,7 @@
 - Smoke-runbook для React команды (`docs/dev/api/smoke-runbook-react.md`).
 - Production-пример конфига web auth/cors (`configs/config.prod.example.yaml`).
 - Deploy/Rollback runbook для web API (`docs/dev/instr/web-api-deploy-rollback.md`).
+- SBOM инструкция и генерация (`docs/dev/instr/sbom.md`, `make sbom`).
 - Contract tests для совместимости API.
 
 ## 5. Backlog этапа

@@ -35,6 +35,8 @@
   - `docs/dev/api/smoke-runbook-react.md`
 - Deploy/Rollback runbook для web API:
   - `docs/dev/instr/web-api-deploy-rollback.md`
+- SBOM инструкция:
+  - `docs/dev/instr/sbom.md`
 
 ## Quality status
 

@@ -16,3 +16,4 @@ go build -trimpath -ldflags "-s -w -X main.version=0.1.0" -o bin/goadmin ./cmd/g
 - `go test ./...`
 - `go test -race ./...`
 - `gosec ./...`
+- `make sbom`

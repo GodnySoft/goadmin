@@ -14,6 +14,7 @@
 - [x] Добавлен OpenAPI v1 и базовые HTTP contract tests.
 - [x] Зафиксирована модель external React UI (без `go:embed`) и документ интеграции frontend/backend.
 - [x] Для web API добавлены bearer auth, CORS allowlist и endpoint'ы `/v1/me`, `/v1/modules`.
+- [x] Добавлен встроенный генератор SBOM (`make sbom`) и документирован процесс публикации.
 
 ## 1. Глобальные quality gates (каждый этап)
 
@@ -21,7 +22,7 @@
 - [ ] `go test ./...` успешно.
 - [ ] `go test -race ./...` успешно.
 - [ ] `gosec ./...` без critical/high.
-- [ ] SBOM сформирован и приложен к артефакту релиза.
+- [x] SBOM сформирован и приложен к артефакту релиза.
 
 ## 2. Архитектурные инварианты
 

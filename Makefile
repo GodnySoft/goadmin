@@ -22,11 +22,11 @@ GO_BIN_DIR := $(dir $(GO))
 ENV_VARS := PATH=$(GO_BIN_DIR):$(PATH) GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) GOPROXY=$(GOPROXY) GOSUMDB=$(GOSUMDB) HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= http_proxy= https_proxy= all_proxy= ftp_proxy= FTP_PROXY=
 ENV_VARS := $(ENV_VARS) GOLANGCI_LINT_CACHE=$(CURDIR)/.cache/golangci-lint
 
-.PHONY: all check fmt lint test race sec tidy build run serve deps tools go-check clean go-install
+.PHONY: all check fmt lint test race sec sbom tidy build run serve deps tools go-check clean go-install
 
 all: check
 
-check: go-check tidy fmt lint test race sec build
+check: go-check tidy fmt lint test race sec build sbom
 
 fmt:
 	$(ENV_VARS) $(GO) fmt ./...
@@ -42,6 +42,9 @@ race: go-check
 
 sec: go-check tools
 	$(ENV_VARS) $(GOSEC) ./cmd/... ./internal/... ./pkg/...
+
+sbom: go-check
+	$(ENV_VARS) $(GO) run ./utils/sbom -o bin/sbom-gomod.cdx.json
 
 build: go-check
 	$(ENV_VARS) $(GO) build -trimpath -ldflags "$(LD_FLAGS)" -o $(BINARY) ./cmd/goadmin
