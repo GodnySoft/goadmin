@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -73,6 +74,13 @@ type executeRequest struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
 }
+
+const (
+	maxModuleLen  = 64
+	maxCommandLen = 64
+	maxArgsCount  = 16
+	maxArgLen     = 256
+)
 
 // NewAdapter создает web transport.
 func NewAdapter(registry *core.Registry, authorizer core.Authorizer, store storage.Store, cfg Config) *Adapter {
@@ -438,17 +446,54 @@ func decodeExecuteRequest(r *http.Request) (executeRequest, string, int) {
 		}
 		return executeRequest{}, "invalid_json", http.StatusBadRequest
 	}
-	if dec.More() {
+	var trailing json.RawMessage
+	if err := dec.Decode(&trailing); err != io.EOF {
 		return executeRequest{}, "invalid_json", http.StatusBadRequest
 	}
-	if req.Module == "" || req.Command == "" {
-		return executeRequest{}, "bad_command", http.StatusBadRequest
+	if code := validateExecuteRequest(req); code != "" {
+		return executeRequest{}, code, http.StatusBadRequest
 	}
 	return req, "", 0
 }
 
+func validateExecuteRequest(req executeRequest) string {
+	if req.Module == "" || req.Command == "" {
+		return "bad_command"
+	}
+	if len(req.Module) > maxModuleLen || !isSafeToken(req.Module) {
+		return "bad_module"
+	}
+	if len(req.Command) > maxCommandLen || !isSafeToken(req.Command) {
+		return "bad_command"
+	}
+	if len(req.Args) > maxArgsCount {
+		return "too_many_args"
+	}
+	for _, arg := range req.Args {
+		if len(arg) > maxArgLen {
+			return "arg_too_long"
+		}
+	}
+	return ""
+}
+
 func isBodyTooLargeErr(err error) bool {
 	return strings.Contains(err.Error(), "request body too large")
+}
+
+func isSafeToken(v string) bool {
+	for _, ch := range v {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
+			continue
+		}
+		switch ch {
+		case '_', '-', '.':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func sanitizeRequestID(v string) string {
@@ -705,6 +750,12 @@ func errorMessage(code string) string {
 		return "access denied"
 	case "payload_too_large":
 		return "request payload is too large"
+	case "bad_module":
+		return "module name is invalid"
+	case "too_many_args":
+		return "too many args"
+	case "arg_too_long":
+		return "arg is too long"
 	case "request_timeout":
 		return "request timeout"
 	case "cors_denied", "cors_method_denied":

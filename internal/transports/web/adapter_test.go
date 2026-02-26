@@ -197,6 +197,57 @@ func TestExecuteEndpointBodyTooLarge(t *testing.T) {
 	}
 }
 
+func TestExecuteEndpointRejectsBadModule(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{})
+	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", strings.NewReader(`{"module":"bad module","command":"status","args":[]}`))
+	req.Header.Set("Authorization", "Bearer test-token")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", rr.Code)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["error_code"] != "bad_module" {
+		t.Fatalf("expected error_code bad_module, got %v", resp["error_code"])
+	}
+}
+
+func TestExecuteEndpointRejectsTooManyArgs(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{})
+	args := make([]string, 17)
+	for i := range args {
+		args[i] = "a"
+	}
+	body, err := json.Marshal(map[string]any{
+		"module":  "host",
+		"command": "status",
+		"args":    args,
+	})
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer test-token")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", rr.Code)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["error_code"] != "too_many_args" {
+		t.Fatalf("expected error_code too_many_args, got %v", resp["error_code"])
+	}
+}
+
 func TestExecuteEndpointTimeout(t *testing.T) {
 	adapter := newTestAdapter(t, true, Config{RequestTimeout: 20 * time.Millisecond})
 

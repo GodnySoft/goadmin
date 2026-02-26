@@ -71,7 +71,7 @@
 - [x] AuthN/AuthZ обязателен для всех endpoint, кроме `/health`.
 - [x] Включены request size limit и timeout.
 - [x] CORS policy на explicit allowlist.
-- [ ] Валидация JSON schema для execute endpoint.
+- [x] Валидация JSON schema для execute endpoint (ограничения зафиксированы в OpenAPI и `docs/dev/api/schemas/execute-request.schema.json`).
 - [ ] pprof endpoint (если включен) защищен и выключен по умолчанию.
 
 ## 8. Проверки (Definition of Done)

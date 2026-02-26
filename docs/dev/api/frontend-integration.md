@@ -40,6 +40,13 @@ printf '%s' "$TOKEN" | sha256sum | awk '{print $1}'
 - `GET /v1/audit?...` — аудит.
 - `POST /v1/commands/execute` — исполнение команды.
 
+### Ограничения `ExecuteRequest`
+
+- `module`: `^[A-Za-z0-9_.-]+$`, max 64.
+- `command`: `^[A-Za-z0-9_.-]+$`, max 64.
+- `args`: max 16 элементов, каждый arg max 256.
+- JSON schema: `docs/dev/api/schemas/execute-request.schema.json`.
+
 ## Примеры запросов
 
 ```bash

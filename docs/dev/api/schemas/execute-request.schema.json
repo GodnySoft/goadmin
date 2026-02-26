@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goadmin.local/schemas/execute-request.schema.json",
+  "title": "ExecuteRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["module", "command"],
+  "properties": {
+    "module": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "args": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "string",
+        "maxLength": 256
+      }
+    }
+  }
+}
