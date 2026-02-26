@@ -3,6 +3,8 @@ package web
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -68,7 +70,7 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
-func TestProtectedEndpointRequiresSubject(t *testing.T) {
+func TestProtectedEndpointRequiresAuth(t *testing.T) {
 	adapter := newTestAdapter(t, false, Config{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/audit", nil)
 	rr := httptest.NewRecorder()
@@ -80,12 +82,12 @@ func TestProtectedEndpointRequiresSubject(t *testing.T) {
 	assertErrorHasRequestID(t, rr)
 }
 
-func TestExecuteEndpointAuthorized(t *testing.T) {
+func TestExecuteEndpointAuthorizedBearer(t *testing.T) {
 	adapter := newTestAdapter(t, false, Config{})
 
 	body := bytes.NewBufferString(`{"module":"host","command":"status","args":[]}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", body)
-	req.Header.Set("X-Subject-ID", "u1")
+	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("X-Request-ID", "abc-123")
 	rr := httptest.NewRecorder()
 	adapter.routes().ServeHTTP(rr, req)
@@ -112,12 +114,54 @@ func TestExecuteEndpointAuthorized(t *testing.T) {
 	}
 }
 
+func TestInvalidTokenDenied(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{})
+
+	body := bytes.NewBufferString(`{"module":"host","command":"status","args":[]}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", body)
+	req.Header.Set("Authorization", "Bearer bad-token")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rr.Code)
+	}
+}
+
+func TestLegacySubjectHeaderWhenEnabled(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{AllowLegacySubjectHeader: true})
+
+	body := bytes.NewBufferString(`{"module":"host","command":"status","args":[]}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", body)
+	req.Header.Set("X-Subject-ID", "u1")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+}
+
+func TestLegacySubjectHeaderWhenDisabled(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{AllowLegacySubjectHeader: false})
+
+	body := bytes.NewBufferString(`{"module":"host","command":"status","args":[]}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", body)
+	req.Header.Set("X-Subject-ID", "u1")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rr.Code)
+	}
+}
+
 func TestInvalidRequestIDGetsReplaced(t *testing.T) {
 	adapter := newTestAdapter(t, false, Config{})
 
 	body := bytes.NewBufferString(`{"module":"host","command":"status","args":[]}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", body)
-	req.Header.Set("X-Subject-ID", "u1")
+	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("X-Request-ID", "bad id with spaces")
 	rr := httptest.NewRecorder()
 	adapter.routes().ServeHTTP(rr, req)
@@ -134,7 +178,7 @@ func TestExecuteEndpointBodyTooLarge(t *testing.T) {
 	adapter := newTestAdapter(t, false, Config{MaxRequestBody: 16})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", strings.NewReader(`{"module":"host","command":"status","args":["a","b","c"]}`))
-	req.Header.Set("X-Subject-ID", "u1")
+	req.Header.Set("Authorization", "Bearer test-token")
 	rr := httptest.NewRecorder()
 	adapter.routes().ServeHTTP(rr, req)
 
@@ -148,7 +192,7 @@ func TestExecuteEndpointTimeout(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"module":"host","command":"status","args":[]}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", body)
-	req.Header.Set("X-Subject-ID", "u1")
+	req.Header.Set("Authorization", "Bearer test-token")
 	rr := httptest.NewRecorder()
 	adapter.routes().ServeHTTP(rr, req)
 
@@ -168,12 +212,40 @@ func TestLatestMetricEndpoint(t *testing.T) {
 	adapter := newAdapterWithStore(t, store, false, Config{})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/metrics/latest?module=host", nil)
-	req.Header.Set("X-Subject-ID", "u1")
+	req.Header.Set("Authorization", "Bearer test-token")
 	rr := httptest.NewRecorder()
 	adapter.routes().ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+}
+
+func TestCORSPreflight(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{CORSAllowedOrigins: []string{"https://ui.local"}})
+	req := httptest.NewRequest(http.MethodOptions, "/v1/commands/execute", nil)
+	req.Header.Set("Origin", "https://ui.local")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d", rr.Code)
+	}
+	if rr.Header().Get("Access-Control-Allow-Origin") != "https://ui.local" {
+		t.Fatalf("unexpected allow-origin: %q", rr.Header().Get("Access-Control-Allow-Origin"))
+	}
+}
+
+func TestCORSDeniedOrigin(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{CORSAllowedOrigins: []string{"https://ui.local"}})
+	req := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
+	req.Header.Set("Origin", "https://evil.local")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", rr.Code)
 	}
 }
 
@@ -207,6 +279,20 @@ func newAdapterWithStore(t *testing.T, store storage.Store, block bool, cfg Conf
 	if err := registry.Register(context.Background(), &fakeProvider{block: block}); err != nil {
 		t.Fatalf("register fake provider: %v", err)
 	}
-	authz := core.NewAllowlistAuthorizer(map[string][]string{"web": {"u1"}})
+	authz := core.NewAllowlistAuthorizer(map[string][]string{"web": {"u1", "ui-admin"}})
+	if len(cfg.Tokens) == 0 {
+		cfg.Tokens = []TokenEntry{{
+			ID:          "t1",
+			TokenSHA256: tokenSHA256("test-token"),
+			Subject:     "u1",
+			Roles:       []string{"admin"},
+			Enabled:     true,
+		}}
+	}
 	return NewAdapter(registry, authz, store, cfg)
+}
+
+func tokenSHA256(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

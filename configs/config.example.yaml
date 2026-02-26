@@ -24,6 +24,19 @@ web:
   request_timeout_ms: 3000
   shutdown_timeout_s: 5
   max_body_bytes: 1048576
+  auth:
+    mode: bearer
+    allow_legacy_subject_header: true
+    tokens:
+      - id: ui-dev
+        token_sha256: ""
+        subject: ui-admin
+        roles: ["admin"]
+        enabled: true
+  cors:
+    allowed_origins: []
+    allowed_methods: ["GET", "POST", "OPTIONS"]
+    allowed_headers: ["Authorization", "Content-Type", "X-Request-ID"]
 
 llm:
   enabled: false

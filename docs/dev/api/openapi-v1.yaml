@@ -2,204 +2,32 @@ openapi: 3.0.3
 info:
   title: goadmin Web API
   version: v1
-  description: Минимальный контракт API этапа Stage 4.
+  description: |
+    Контракт API для внешнего React-интерфейса.
+    UI разворачивается отдельно от goadmin.
 servers:
   - url: http://127.0.0.1:8080
-paths:
-  /v1/health:
-    get:
-      summary: Health check
-      responses:
-        "200":
-          description: Service is healthy
-          headers:
-            X-Request-ID:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [status]
-                properties:
-                  status:
-                    type: string
-                    enum: [ok]
-  /v1/commands/execute:
-    post:
-      summary: Execute module command
-      parameters:
-        - in: header
-          name: X-Subject-ID
-          required: true
-          schema:
-            type: string
-        - in: header
-          name: X-Request-ID
-          required: false
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ExecuteRequest"
-      responses:
-        "200":
-          description: Command executed
-          headers:
-            X-Request-ID:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ExecuteSuccess"
-        "400":
-          description: Invalid command payload
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Missing subject
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Access denied
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "413":
-          description: Payload too large
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "504":
-          description: Request timeout
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /v1/metrics/latest:
-    get:
-      summary: Get latest module metric
-      parameters:
-        - in: header
-          name: X-Subject-ID
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: module
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Latest metric
-          headers:
-            X-Request-ID:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MetricLatestResponse"
-        "400":
-          description: Bad query
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Missing subject
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Access denied
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Metric not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /v1/audit:
-    get:
-      summary: Query audit events
-      parameters:
-        - in: header
-          name: X-Subject-ID
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: from
-          required: false
-          schema:
-            type: string
-            format: date-time
-        - in: query
-          name: to
-          required: false
-          schema:
-            type: string
-            format: date-time
-        - in: query
-          name: subject
-          required: false
-          schema:
-            type: string
-        - in: query
-          name: limit
-          required: false
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Audit list
-          headers:
-            X-Request-ID:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditQueryResponse"
-        "400":
-          description: Bad query
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Missing subject
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Access denied
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Token
   schemas:
+    ErrorResponse:
+      type: object
+      required: [request_id, error_code, message]
+      properties:
+        request_id:
+          type: string
+        error_code:
+          type: string
+        message:
+          type: string
     ExecuteRequest:
       type: object
       required: [module, command]
+      additionalProperties: false
       properties:
         module:
           type: string
@@ -264,11 +92,246 @@ components:
               ts:
                 type: string
                 format: date-time
-    ErrorResponse:
+    MeResponse:
       type: object
-      required: [request_id, error_code]
+      required: [request_id, subject, roles, auth_method]
       properties:
         request_id:
           type: string
-        error_code:
+        subject:
           type: string
+        roles:
+          type: array
+          items:
+            type: string
+        auth_method:
+          type: string
+    ModulesResponse:
+      type: object
+      required: [request_id, items]
+      properties:
+        request_id:
+          type: string
+        items:
+          type: array
+          items:
+            type: string
+paths:
+  /v1/health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+  /v1/me:
+    get:
+      summary: Current web subject profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current subject
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          description: Authentication required or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/modules:
+    get:
+      summary: List available modules
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Modules list
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModulesResponse"
+        "401":
+          description: Authentication required or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/commands/execute:
+    post:
+      summary: Execute module command
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecuteRequest"
+      responses:
+        "200":
+          description: Command executed
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecuteSuccess"
+        "400":
+          description: Invalid command payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "504":
+          description: Request timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/metrics/latest:
+    get:
+      summary: Get latest module metric
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: module
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Latest metric
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricLatestResponse"
+        "400":
+          description: Bad query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Metric not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/audit:
+    get:
+      summary: Query audit events
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: from
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: subject
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit list
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditQueryResponse"
+        "400":
+          description: Bad query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

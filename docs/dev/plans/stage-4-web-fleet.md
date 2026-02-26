@@ -1,31 +1,28 @@
-# Stage 4 — Web API, Embedded UI, Fleet Operations
+# Stage 4 — Web API + External React UI Integration
 
 ## 1. Цель этапа
 
-Добавить HTTP API и встроенный UI (через `go:embed`) для локального контроля агента и базовых fleet-операций, не нарушая изоляцию core.
+Стабилизировать HTTP API как backend для внешнего React UI (разрабатывается отдельно), с фокусом на безопасную интеграцию и контрактную совместимость.
 
 ## Статус реализации (2026-02-26)
 
-- Выполнен стартовый каркас `internal/transports/web` с lifecycle `Start/Stop`.
-- Реализованы базовые endpoint'ы v1: `health`, `commands/execute`, `metrics/latest`, `audit`.
-- Для API реализован middleware hardening:
-  - auth через `X-Subject-ID` в middleware;
-  - сквозной `request_id` через `X-Request-ID` (или генерация сервером);
-  - общий request-timeout middleware и body-size limit middleware.
-- Добавлен OpenAPI-контракт v1: `docs/dev/api/openapi-v1.yaml`.
-- Добавлены contract tests для web API (`TestHTTPContract*`).
+- Выполнен стартовый web transport (`internal/transports/web`) и базовые v1 endpoint'ы.
+- Реализован middleware hardening (request_id, timeout, body-size limit).
+- Добавлен OpenAPI контракт и contract tests.
+- Архитектурный вектор обновлен: UI не встраивается в бинарник, React UI разворачивается отдельно.
 
 ## 2. Scope
 
 ### In Scope
 
 - HTTP transport на стандартном `net/http` (Go 1.22 router).
-- API v1: health, execute command, latest metrics, audit query.
-- Встроенный UI: базовый dashboard (status, metrics, recent audit).
+- API v1: health, me, modules, execute command, latest metrics, audit query.
+- Интеграция с внешним React UI по OpenAPI контракту.
 - Корреляция `request_id` между API, core и журналами.
 
 ### Out of Scope
 
+- Встраивание frontend-ассетов в бинарник (`go:embed`).
 - Публичный интернет-доступ без reverse proxy и mTLS.
 - Полноценный multi-tenant UI.
 
@@ -33,14 +30,14 @@
 
 - [ ] Stage 3 закрыт.
 - [ ] Определен список разрешенных API методов v1.
-- [ ] Утверждена политика CORS/CSRF.
+- [x] Утверждена политика CORS allowlist для внешнего React origin.
 
 ## 4. Выходные артефакты
 
-- `internal/transports/web` с роутами v1.
-- Контракт OpenAPI (минимум для v1 endpoints).
-- Embedded UI assets в бинарнике.
-- Документация API и примеры запросов.
+- `internal/transports/web` с безопасными middleware и bearer auth.
+- OpenAPI контракт v1 (`docs/dev/api/openapi-v1.yaml`).
+- Документация интеграции frontend/backend (`docs/dev/api/frontend-integration.md`).
+- Contract tests для совместимости API.
 
 ## 5. Backlog этапа
 
@@ -49,23 +46,28 @@
 | S4-01 | Реализовать HTTP server lifecycle | Устойчивый web transport | Stage 3 | 1д |
 | S4-02 | Реализовать v1 endpoints | Рабочий API контракт | S4-01 | 1.5д |
 | S4-03 | Реализовать auth middleware | Защита API | S4-02 | 1д |
-| S4-04 | Встроить UI через `go:embed` | Self-contained бинарник | S4-02 | 1д |
-| S4-05 | Добавить OpenAPI и contract tests | Контроль совместимости | S4-02 | 1д |
-| S4-06 | Нагрузочные тесты API | Проверка производительности | S4-02 | 0.5д |
+| S4-04 | Зафиксировать API для external React | Совместимый frontend/backend контракт | S4-03 | 1д |
+| S4-05 | Добавить/расширить OpenAPI и contract tests | Контроль совместимости | S4-04 | 1д |
+| S4-06 | Нагрузочные тесты API | Проверка производительности | S4-05 | 0.5д |
+| S4-07 | Внедрить bearer auth + legacy fallback | Безопасная auth-модель для web | S4-04 | 1д |
+| S4-08 | Реализовать CORS allowlist policy | Безопасный доступ из React UI | S4-04 | 0.5д |
 
 ## 6. API/Контракты/Схемы
 
 - `GET /v1/health` -> `{"status":"ok"}`.
-- `POST /v1/commands/execute` -> принимает `CommandEnvelope`.
+- `GET /v1/me` -> профиль текущего субъекта (subject/roles/auth_method).
+- `GET /v1/modules` -> список доступных модулей.
+- `POST /v1/commands/execute` -> принимает `ExecuteRequest`.
 - `GET /v1/metrics/latest?module=host`.
-- `GET /v1/audit?from=&to=&subject=`.
-- Ошибки: унифицированный `error_code`, без утечки внутренних деталей.
+- `GET /v1/audit?from=&to=&subject=&limit=`.
+- Auth: `Authorization: Bearer <token>` (legacy `X-Subject-ID` только для совместимости).
+- Ошибки: унифицированный `error_code` + `message`, без утечки внутренних деталей.
 
 ## 7. Security Gates
 
-- [ ] AuthN/AuthZ обязателен для всех endpoint, кроме `/health`.
-- [ ] Включены request size limit и timeout.
-- [ ] CORS и CSRF политика зафиксированы.
+- [x] AuthN/AuthZ обязателен для всех endpoint, кроме `/health`.
+- [x] Включены request size limit и timeout.
+- [x] CORS policy на explicit allowlist.
 - [ ] Валидация JSON schema для execute endpoint.
 - [ ] pprof endpoint (если включен) защищен и выключен по умолчанию.
 
@@ -73,9 +75,9 @@
 
 ### Функциональные
 
-- [ ] Все endpoint возвращают ожидаемые коды/контракты.
-- [ ] UI отображает статус агента и последние метрики.
-- [ ] `request_id` сквозной во всех логах запроса.
+- [x] Все endpoint возвращают ожидаемые коды/контракты.
+- [ ] Внешний React UI интегрирован через API v1 без контрактных расхождений.
+- [x] `request_id` сквозной во всех логах запроса.
 
 ### Нефункциональные
 
@@ -114,6 +116,6 @@ curl -sS http://127.0.0.1:8080/v1/health
 
 ## 12. Exit Criteria
 
-- [ ] API v1 стабилен и покрыт contract tests.
-- [ ] UI встроен в бинарник и работает без внешнего web server.
+- [x] API v1 стабилен и покрыт contract tests.
+- [x] Модель external React UI зафиксирована в документации и OpenAPI.
 - [ ] Выполнены performance/security критерии этапа.

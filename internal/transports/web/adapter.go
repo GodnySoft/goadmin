@@ -3,11 +3,13 @@ package web
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,19 +22,35 @@ import (
 type contextKey string
 
 const (
-	ctxRequestID contextKey = "request_id"
-	ctxSubjectID contextKey = "subject_id"
+	ctxRequestID  contextKey = "request_id"
+	ctxSubjectID  contextKey = "subject_id"
+	ctxRoles      contextKey = "roles"
+	ctxAuthMethod contextKey = "auth_method"
 	ctxExecuteReq contextKey = "execute_req"
 )
 
+// TokenEntry описывает web bearer-токен.
+type TokenEntry struct {
+	ID          string
+	TokenSHA256 string
+	Subject     string
+	Roles       []string
+	Enabled     bool
+}
+
 // Config определяет параметры HTTP-транспорта.
 type Config struct {
-	ListenAddr      string
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
-	ShutdownTimeout time.Duration
-	RequestTimeout  time.Duration
-	MaxRequestBody  int64
+	ListenAddr               string
+	ReadTimeout              time.Duration
+	WriteTimeout             time.Duration
+	ShutdownTimeout          time.Duration
+	RequestTimeout           time.Duration
+	MaxRequestBody           int64
+	AllowLegacySubjectHeader bool
+	Tokens                   []TokenEntry
+	CORSAllowedOrigins       []string
+	CORSAllowedMethods       []string
+	CORSAllowedHeaders       []string
 }
 
 // Adapter реализует web transport поверх net/http.
@@ -41,6 +59,9 @@ type Adapter struct {
 	authorizer core.Authorizer
 	store      storage.Store
 	cfg        Config
+
+tokensByHash map[string]TokenEntry
+	corsOrigins map[string]struct{}
 
 	mu     sync.Mutex
 	server *http.Server
@@ -72,11 +93,38 @@ func NewAdapter(registry *core.Registry, authorizer core.Authorizer, store stora
 	if cfg.MaxRequestBody <= 0 {
 		cfg.MaxRequestBody = 1 << 20
 	}
+	if len(cfg.CORSAllowedMethods) == 0 {
+		cfg.CORSAllowedMethods = []string{"GET", "POST", "OPTIONS"}
+	}
+	if len(cfg.CORSAllowedHeaders) == 0 {
+		cfg.CORSAllowedHeaders = []string{"Authorization", "Content-Type", "X-Request-ID"}
+	}
+
+	tokensByHash := make(map[string]TokenEntry, len(cfg.Tokens))
+	for _, token := range cfg.Tokens {
+		h := strings.ToLower(strings.TrimSpace(token.TokenSHA256))
+		if len(h) != 64 {
+			continue
+		}
+		tokensByHash[h] = token
+	}
+
+	corsOrigins := make(map[string]struct{}, len(cfg.CORSAllowedOrigins))
+	for _, origin := range cfg.CORSAllowedOrigins {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed == "" {
+			continue
+		}
+		corsOrigins[trimmed] = struct{}{}
+	}
+
 	return &Adapter{
-		registry:   registry,
-		authorizer: authorizer,
-		store:      store,
-		cfg:        cfg,
+		registry:    registry,
+		authorizer:  authorizer,
+		store:       store,
+		cfg:         cfg,
+		tokensByHash: tokensByHash,
+		corsOrigins: corsOrigins,
 	}
 }
 
@@ -135,41 +183,49 @@ func chain(h http.Handler, mws ...middleware) http.Handler {
 }
 
 func (a *Adapter) routes() http.Handler {
-	// Для health не требуем auth/timeout, но проставляем request_id для трассировки.
-	health := chain(http.HandlerFunc(a.handleHealth), a.requestIDMiddleware())
+	mux := http.NewServeMux()
+
+	mux.Handle("GET /v1/health", http.HandlerFunc(a.handleHealth))
 
 	protected := chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
-	}), a.requestIDMiddleware(), a.timeoutMiddleware(), a.subjectMiddleware())
+	}), a.timeoutMiddleware(), a.authSubjectMiddleware())
 
-	execute := chain(http.HandlerFunc(a.handleExecute),
-		a.requestIDMiddleware(),
-		a.timeoutMiddleware(),
-		a.subjectMiddleware(),
-		a.maxBodyMiddleware(),
-		a.authorizeExecuteMiddleware(),
-	)
-	metric := chain(http.HandlerFunc(a.handleLatestMetric),
-		a.requestIDMiddleware(),
-		a.timeoutMiddleware(),
-		a.subjectMiddleware(),
-		a.authorizeMetricMiddleware(),
-	)
-	audit := chain(http.HandlerFunc(a.handleAudit),
-		a.requestIDMiddleware(),
-		a.timeoutMiddleware(),
-		a.subjectMiddleware(),
-		a.authorizeActionMiddleware("web:audit_query", core.Action{Module: "audit", Command: "read"}),
-	)
-
-	mux := http.NewServeMux()
-	mux.Handle("GET /v1/health", health)
 	mux.Handle("GET /v1/", protected)
 	mux.Handle("POST /v1/", protected)
-	mux.Handle("GET /v1/metrics/latest", metric)
-	mux.Handle("GET /v1/audit", audit)
-	mux.Handle("POST /v1/commands/execute", execute)
-	return mux
+
+	mux.Handle("GET /v1/me", chain(http.HandlerFunc(a.handleMe),
+		a.timeoutMiddleware(),
+		a.authSubjectMiddleware(),
+		a.authorizeActionMiddleware("web:me", core.Action{Module: "web", Command: "me"}),
+	))
+
+	mux.Handle("GET /v1/modules", chain(http.HandlerFunc(a.handleModules),
+		a.timeoutMiddleware(),
+		a.authSubjectMiddleware(),
+		a.authorizeActionMiddleware("web:modules", core.Action{Module: "web", Command: "modules"}),
+	))
+
+	mux.Handle("POST /v1/commands/execute", chain(http.HandlerFunc(a.handleExecute),
+		a.timeoutMiddleware(),
+		a.authSubjectMiddleware(),
+		a.maxBodyMiddleware(),
+		a.authorizeExecuteMiddleware(),
+	))
+
+	mux.Handle("GET /v1/metrics/latest", chain(http.HandlerFunc(a.handleLatestMetric),
+		a.timeoutMiddleware(),
+		a.authSubjectMiddleware(),
+		a.authorizeMetricMiddleware(),
+	))
+
+	mux.Handle("GET /v1/audit", chain(http.HandlerFunc(a.handleAudit),
+		a.timeoutMiddleware(),
+		a.authSubjectMiddleware(),
+		a.authorizeActionMiddleware("web:audit_query", core.Action{Module: "audit", Command: "read"}),
+	))
+
+	return chain(mux, a.requestIDMiddleware(), a.corsMiddleware())
 }
 
 func (a *Adapter) requestIDMiddleware() middleware {
@@ -186,6 +242,52 @@ func (a *Adapter) requestIDMiddleware() middleware {
 	}
 }
 
+func (a *Adapter) corsMiddleware() middleware {
+	allowMethods := strings.Join(a.cfg.CORSAllowedMethods, ", ")
+	allowHeaders := strings.Join(a.cfg.CORSAllowedHeaders, ", ")
+
+	isMethodAllowed := func(method string) bool {
+		for _, m := range a.cfg.CORSAllowedMethods {
+			if strings.EqualFold(strings.TrimSpace(m), method) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := strings.TrimSpace(r.Header.Get("Origin"))
+			if origin == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if _, ok := a.corsOrigins[origin]; !ok {
+				writeError(w, r, http.StatusForbidden, "cors_denied")
+				return
+			}
+
+			w.Header().Set("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", allowMethods)
+			w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
+
+			if r.Method == http.MethodOptions {
+				preflightMethod := strings.TrimSpace(r.Header.Get("Access-Control-Request-Method"))
+				if preflightMethod != "" && !isMethodAllowed(preflightMethod) {
+					writeError(w, r, http.StatusForbidden, "cors_method_denied")
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func (a *Adapter) timeoutMiddleware() middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -196,18 +298,47 @@ func (a *Adapter) timeoutMiddleware() middleware {
 	}
 }
 
-func (a *Adapter) subjectMiddleware() middleware {
+func (a *Adapter) authSubjectMiddleware() middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			subjectID := strings.TrimSpace(r.Header.Get("X-Subject-ID"))
-			if subjectID == "" {
-				writeError(w, r, http.StatusUnauthorized, "subject_required")
+			subjectID, roles, authMethod, code := a.resolveSubject(r)
+			if code != "" {
+				writeError(w, r, http.StatusUnauthorized, code)
 				return
 			}
 			ctx := context.WithValue(r.Context(), ctxSubjectID, subjectID)
+			ctx = context.WithValue(ctx, ctxRoles, roles)
+			ctx = context.WithValue(ctx, ctxAuthMethod, authMethod)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func (a *Adapter) resolveSubject(r *http.Request) (string, []string, string, string) {
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+		token := strings.TrimSpace(authHeader[7:])
+		if token == "" {
+			return "", nil, "", "invalid_token"
+		}
+		sum := sha256.Sum256([]byte(token))
+		hash := hex.EncodeToString(sum[:])
+		entry, ok := a.tokensByHash[hash]
+		if !ok || !entry.Enabled || entry.Subject == "" {
+			return "", nil, "", "invalid_token"
+		}
+		roles := append([]string(nil), entry.Roles...)
+		return entry.Subject, roles, "bearer", ""
+	}
+
+	if a.cfg.AllowLegacySubjectHeader {
+		subjectID := strings.TrimSpace(r.Header.Get("X-Subject-ID"))
+		if subjectID != "" {
+			return subjectID, nil, "legacy_header", ""
+		}
+	}
+
+	return "", nil, "", "auth_required"
 }
 
 func (a *Adapter) maxBodyMiddleware() middleware {
@@ -224,12 +355,12 @@ func (a *Adapter) authorizeActionMiddleware(auditAction string, authAction core.
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			subjectID := subjectIDFromContext(r.Context())
 			if subjectID == "" {
-				writeError(w, r, http.StatusUnauthorized, "subject_required")
+				writeError(w, r, http.StatusUnauthorized, "auth_required")
 				return
 			}
 			if err := a.authorizer.Authorize(core.Subject{Source: "web", ID: subjectID}, authAction); err != nil {
 				writeError(w, r, http.StatusForbidden, "access_denied")
-				_ = a.writeAudit(r.Context(), subjectID, auditAction, "denied", nil, requestIDFromContext(r.Context()))
+				_ = a.writeAudit(r.Context(), subjectID, auditAction, "denied", map[string]string{"auth_method": authMethodFromContext(r.Context())}, requestIDFromContext(r.Context()))
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -242,21 +373,21 @@ func (a *Adapter) authorizeExecuteMiddleware() middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			subjectID := subjectIDFromContext(r.Context())
 			if subjectID == "" {
-				writeError(w, r, http.StatusUnauthorized, "subject_required")
+				writeError(w, r, http.StatusUnauthorized, "auth_required")
 				return
 			}
 
 			req, code, statusCode := decodeExecuteRequest(r)
 			if code != "" {
 				writeError(w, r, statusCode, code)
-				_ = a.writeAudit(r.Context(), subjectID, "web:execute", "error", map[string]string{"error_code": code}, requestIDFromContext(r.Context()))
+				_ = a.writeAudit(r.Context(), subjectID, "web:execute", "error", map[string]string{"error_code": code, "auth_method": authMethodFromContext(r.Context())}, requestIDFromContext(r.Context()))
 				return
 			}
 
 			action := core.Action{Module: req.Module, Command: req.Command}
 			if err := a.authorizer.Authorize(core.Subject{Source: "web", ID: subjectID}, action); err != nil {
 				writeError(w, r, http.StatusForbidden, "access_denied")
-				_ = a.writeAudit(r.Context(), subjectID, "web:execute", "denied", map[string]string{"module": req.Module, "command": req.Command}, requestIDFromContext(r.Context()))
+				_ = a.writeAudit(r.Context(), subjectID, "web:execute", "denied", map[string]string{"module": req.Module, "command": req.Command, "auth_method": authMethodFromContext(r.Context())}, requestIDFromContext(r.Context()))
 				return
 			}
 
@@ -278,7 +409,7 @@ func (a *Adapter) authorizeMetricMiddleware() middleware {
 			action := core.Action{Module: module, Command: "read_metrics"}
 			if err := a.authorizer.Authorize(core.Subject{Source: "web", ID: subjectID}, action); err != nil {
 				writeError(w, r, http.StatusForbidden, "access_denied")
-				_ = a.writeAudit(r.Context(), subjectID, "web:metrics_latest", "denied", map[string]string{"module": module}, requestIDFromContext(r.Context()))
+				_ = a.writeAudit(r.Context(), subjectID, "web:metrics_latest", "denied", map[string]string{"module": module, "auth_method": authMethodFromContext(r.Context())}, requestIDFromContext(r.Context()))
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -332,15 +463,34 @@ func (a *Adapter) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (a *Adapter) handleMe(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, r, http.StatusOK, map[string]interface{}{
+		"request_id": requestIDFromContext(r.Context()),
+		"subject":    subjectIDFromContext(r.Context()),
+		"roles":      rolesFromContext(r.Context()),
+		"auth_method": authMethodFromContext(r.Context()),
+	})
+}
+
+func (a *Adapter) handleModules(w http.ResponseWriter, r *http.Request) {
+	providers := a.registry.Providers()
+	sort.Strings(providers)
+	writeJSON(w, r, http.StatusOK, map[string]interface{}{
+		"request_id": requestIDFromContext(r.Context()),
+		"items":      providers,
+	})
+}
+
 func (a *Adapter) handleExecute(w http.ResponseWriter, r *http.Request) {
 	subjectID := subjectIDFromContext(r.Context())
 	requestID := requestIDFromContext(r.Context())
+	authMethod := authMethodFromContext(r.Context())
 
 	raw := r.Context().Value(ctxExecuteReq)
 	req, ok := raw.(executeRequest)
 	if !ok {
 		writeError(w, r, http.StatusBadRequest, "bad_command")
-		_ = a.writeAudit(r.Context(), subjectID, "web:execute", "error", map[string]string{"error_code": "bad_command"}, requestID)
+		_ = a.writeAudit(r.Context(), subjectID, "web:execute", "error", map[string]string{"error_code": "bad_command", "auth_method": authMethod}, requestID)
 		return
 	}
 
@@ -348,7 +498,7 @@ func (a *Adapter) handleExecute(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(r.Context().Err(), context.DeadlineExceeded) {
 			writeError(w, r, http.StatusGatewayTimeout, "request_timeout")
-			_ = a.writeAudit(r.Context(), subjectID, "web:execute", "error", map[string]string{"module": req.Module, "command": req.Command, "error_code": "request_timeout"}, requestID)
+			_ = a.writeAudit(r.Context(), subjectID, "web:execute", "error", map[string]string{"module": req.Module, "command": req.Command, "error_code": "request_timeout", "auth_method": authMethod}, requestID)
 			return
 		}
 		writeJSON(w, r, http.StatusBadRequest, map[string]interface{}{
@@ -356,7 +506,7 @@ func (a *Adapter) handleExecute(w http.ResponseWriter, r *http.Request) {
 			"status":     resp.Status,
 			"error_code": resp.ErrorCode,
 		})
-		_ = a.writeAudit(r.Context(), subjectID, "web:execute", "error", map[string]string{"module": req.Module, "command": req.Command}, requestID)
+		_ = a.writeAudit(r.Context(), subjectID, "web:execute", "error", map[string]string{"module": req.Module, "command": req.Command, "auth_method": authMethod}, requestID)
 		return
 	}
 
@@ -366,12 +516,13 @@ func (a *Adapter) handleExecute(w http.ResponseWriter, r *http.Request) {
 		"data":       resp.Data,
 		"error_code": resp.ErrorCode,
 	})
-	_ = a.writeAudit(r.Context(), subjectID, "web:execute", "ok", map[string]string{"module": req.Module, "command": req.Command}, requestID)
+	_ = a.writeAudit(r.Context(), subjectID, "web:execute", "ok", map[string]string{"module": req.Module, "command": req.Command, "auth_method": authMethod}, requestID)
 }
 
 func (a *Adapter) handleLatestMetric(w http.ResponseWriter, r *http.Request) {
 	requestID := requestIDFromContext(r.Context())
 	subjectID := subjectIDFromContext(r.Context())
+	authMethod := authMethodFromContext(r.Context())
 
 	module := r.URL.Query().Get("module")
 	if module == "" {
@@ -383,11 +534,11 @@ func (a *Adapter) handleLatestMetric(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(r.Context().Err(), context.DeadlineExceeded) {
 			writeError(w, r, http.StatusGatewayTimeout, "request_timeout")
-			_ = a.writeAudit(r.Context(), subjectID, "web:metrics_latest", "error", map[string]string{"module": module, "error_code": "request_timeout"}, requestID)
+			_ = a.writeAudit(r.Context(), subjectID, "web:metrics_latest", "error", map[string]string{"module": module, "error_code": "request_timeout", "auth_method": authMethod}, requestID)
 			return
 		}
 		writeError(w, r, http.StatusNotFound, "metric_not_found")
-		_ = a.writeAudit(r.Context(), subjectID, "web:metrics_latest", "error", map[string]string{"module": module}, requestID)
+		_ = a.writeAudit(r.Context(), subjectID, "web:metrics_latest", "error", map[string]string{"module": module, "auth_method": authMethod}, requestID)
 		return
 	}
 
@@ -397,12 +548,13 @@ func (a *Adapter) handleLatestMetric(w http.ResponseWriter, r *http.Request) {
 		"ts":         rec.TS.UTC().Format(time.RFC3339),
 		"payload":    json.RawMessage(rec.Payload),
 	})
-	_ = a.writeAudit(r.Context(), subjectID, "web:metrics_latest", "ok", map[string]string{"module": module}, requestID)
+	_ = a.writeAudit(r.Context(), subjectID, "web:metrics_latest", "ok", map[string]string{"module": module, "auth_method": authMethod}, requestID)
 }
 
 func (a *Adapter) handleAudit(w http.ResponseWriter, r *http.Request) {
 	requestID := requestIDFromContext(r.Context())
 	subjectID := subjectIDFromContext(r.Context())
+	authMethod := authMethodFromContext(r.Context())
 
 	q := storage.AuditQuery{
 		Subject: r.URL.Query().Get("subject"),
@@ -429,11 +581,11 @@ func (a *Adapter) handleAudit(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(r.Context().Err(), context.DeadlineExceeded) {
 			writeError(w, r, http.StatusGatewayTimeout, "request_timeout")
-			_ = a.writeAudit(r.Context(), subjectID, "web:audit_query", "error", map[string]string{"error_code": "request_timeout"}, requestID)
+			_ = a.writeAudit(r.Context(), subjectID, "web:audit_query", "error", map[string]string{"error_code": "request_timeout", "auth_method": authMethod}, requestID)
 			return
 		}
 		writeError(w, r, http.StatusInternalServerError, "query_failed")
-		_ = a.writeAudit(r.Context(), subjectID, "web:audit_query", "error", nil, requestID)
+		_ = a.writeAudit(r.Context(), subjectID, "web:audit_query", "error", map[string]string{"auth_method": authMethod}, requestID)
 		return
 	}
 
@@ -463,7 +615,7 @@ func (a *Adapter) handleAudit(w http.ResponseWriter, r *http.Request) {
 		"request_id": requestID,
 		"items":      payload,
 	})
-	_ = a.writeAudit(r.Context(), subjectID, "web:audit_query", "ok", map[string]string{"items": strconv.Itoa(len(payload))}, requestID)
+	_ = a.writeAudit(r.Context(), subjectID, "web:audit_query", "ok", map[string]string{"items": strconv.Itoa(len(payload)), "auth_method": authMethod}, requestID)
 }
 
 func requestIDFromContext(ctx context.Context) string {
@@ -476,6 +628,16 @@ func requestIDFromContext(ctx context.Context) string {
 
 func subjectIDFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(ctxSubjectID).(string)
+	return v
+}
+
+func rolesFromContext(ctx context.Context) []string {
+	v, _ := ctx.Value(ctxRoles).([]string)
+	return v
+}
+
+func authMethodFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(ctxAuthMethod).(string)
 	return v
 }
 
@@ -518,7 +680,27 @@ func writeError(w http.ResponseWriter, r *http.Request, statusCode int, code str
 	writeJSON(w, r, statusCode, map[string]string{
 		"request_id": requestIDFromContext(r.Context()),
 		"error_code": code,
+		"message":    errorMessage(code),
 	})
+}
+
+func errorMessage(code string) string {
+	switch code {
+	case "auth_required":
+		return "authentication is required"
+	case "invalid_token":
+		return "token is invalid"
+	case "access_denied":
+		return "access denied"
+	case "payload_too_large":
+		return "request payload is too large"
+	case "request_timeout":
+		return "request timeout"
+	case "cors_denied", "cors_method_denied":
+		return "cors policy denied request"
+	default:
+		return code
+	}
 }
 
 func writeJSON(w http.ResponseWriter, r *http.Request, statusCode int, v interface{}) {

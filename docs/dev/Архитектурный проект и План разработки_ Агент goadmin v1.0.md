@@ -28,7 +28,7 @@
 * **CLI интерфейс:** github.com/spf13/cobra.  
 * **Взаимодействие с ОС:** github.com/shirou/gopsutil/v3, стандартные пакеты os/exec (с безопасными обертками).  
 * **Хранилище метрик/логов:** Встроенная SQLite (github.com/mattn/go-sqlite3 или pure-go аналоги).  
-* **Web/UI:** Встроенный SPA (React/Vue), отдаваемый через go:embed.  
+* **Web/API + UI:** API в `goadmin`, а React UI разрабатывается и разворачивается отдельно (external frontend).  
 * **ОС:** Ubuntu 24.04 LTS (systemd, journald).
 
 ---
@@ -112,8 +112,8 @@ type CommandProvider interface {
 ### **Этап 4: Web-интерфейс (Fleet Management)**
 
 * Написать REST API в transports/web с использованием стандартного net/http (Go 1.22 routing).  
-* Подготовить базовый фронтенд (SPA) и упаковать его в бинарник через go:embed.  
-* **Результат:** Доступ к дашборду агента через браузер по локальному IP/порту.
+* Подготовить API-контракт для внешнего React UI (OpenAPI + contract tests).  
+* **Результат:** Отдельный React UI стабильно работает с API агента по утвержденному контракту.
 
 ### **Этап 5: Инфраструктура и Hardening**
 
@@ -135,4 +135,3 @@ type CommandProvider interface {
 Документ обновлен и структурирован.
 
 Хочешь ли ты, чтобы я подготовил стартовый main.go и базовую инициализацию Cobra (Boilerplate) для проекта goadmin, чтобы разработчик мог сразу скопировать правильную структуру запуска с учетом Graceful Shutdown?
-

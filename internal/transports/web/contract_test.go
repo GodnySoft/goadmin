@@ -35,7 +35,7 @@ func TestHTTPContractExecuteSuccess(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"module":"host","command":"status","args":[]}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/commands/execute", body)
-	req.Header.Set("X-Subject-ID", "u1")
+	req.Header.Set("Authorization", "Bearer test-token")
 	req.Header.Set("X-Request-ID", "contract-1")
 	rr := httptest.NewRecorder()
 	adapter.routes().ServeHTTP(rr, req)
@@ -73,8 +73,8 @@ func TestHTTPContractExecuteUnauthorized(t *testing.T) {
 	if _, ok := resp["request_id"]; !ok {
 		t.Fatal("missing request_id")
 	}
-	if resp["error_code"] != "subject_required" {
-		t.Fatalf("error_code = %v, want subject_required", resp["error_code"])
+	if resp["error_code"] != "auth_required" {
+		t.Fatalf("error_code = %v, want auth_required", resp["error_code"])
 	}
 }
 
@@ -82,7 +82,7 @@ func TestHTTPContractMetricsLatest(t *testing.T) {
 	adapter := newTestAdapter(t, false, Config{})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/metrics/latest?module=host", nil)
-	req.Header.Set("X-Subject-ID", "u1")
+	req.Header.Set("Authorization", "Bearer test-token")
 	rr := httptest.NewRecorder()
 	adapter.routes().ServeHTTP(rr, req)
 
@@ -105,7 +105,7 @@ func TestHTTPContractAudit(t *testing.T) {
 	adapter := newTestAdapter(t, false, Config{})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/audit", nil)
-	req.Header.Set("X-Subject-ID", "u1")
+	req.Header.Set("Authorization", "Bearer test-token")
 	rr := httptest.NewRecorder()
 	adapter.routes().ServeHTTP(rr, req)
 
@@ -121,5 +121,31 @@ func TestHTTPContractAudit(t *testing.T) {
 	}
 	if _, ok := resp["items"]; !ok {
 		t.Fatal("missing items")
+	}
+}
+
+func TestHTTPContractMe(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+}
+
+func TestHTTPContractModules(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/modules", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
 	}
 }

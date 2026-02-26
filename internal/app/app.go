@@ -51,13 +51,29 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("register maxbot transport: %w", err)
 	}
 	if cfg.Web.Enabled {
+		tokens := make([]web.TokenEntry, 0, len(cfg.Web.Auth.Tokens))
+		for _, token := range cfg.Web.Auth.Tokens {
+			tokens = append(tokens, web.TokenEntry{
+				ID:          token.ID,
+				TokenSHA256: token.TokenSHA256,
+				Subject:     token.Subject,
+				Roles:       token.Roles,
+				Enabled:     token.Enabled,
+			})
+		}
+
 		webAdapter := web.NewAdapter(r, authz, st, web.Config{
-			ListenAddr:      cfg.Web.ListenAddr,
-			ReadTimeout:     time.Duration(cfg.Web.ReadTimeoutMS) * time.Millisecond,
-			WriteTimeout:    time.Duration(cfg.Web.WriteTimeoutMS) * time.Millisecond,
-			RequestTimeout:  time.Duration(cfg.Web.RequestTimeoutMS) * time.Millisecond,
-			ShutdownTimeout: time.Duration(cfg.Web.ShutdownTimeoutS) * time.Second,
-			MaxRequestBody:  cfg.Web.MaxBodyBytes,
+			ListenAddr:               cfg.Web.ListenAddr,
+			ReadTimeout:              time.Duration(cfg.Web.ReadTimeoutMS) * time.Millisecond,
+			WriteTimeout:             time.Duration(cfg.Web.WriteTimeoutMS) * time.Millisecond,
+			RequestTimeout:           time.Duration(cfg.Web.RequestTimeoutMS) * time.Millisecond,
+			ShutdownTimeout:          time.Duration(cfg.Web.ShutdownTimeoutS) * time.Second,
+			MaxRequestBody:           cfg.Web.MaxBodyBytes,
+			AllowLegacySubjectHeader: cfg.Web.Auth.AllowLegacySubjectHeader,
+			Tokens:                   tokens,
+			CORSAllowedOrigins:       cfg.Web.CORS.AllowedOrigins,
+			CORSAllowedMethods:       cfg.Web.CORS.AllowedMethods,
+			CORSAllowedHeaders:       cfg.Web.CORS.AllowedHeaders,
 		})
 		if err := transports.Register(webAdapter); err != nil {
 			return nil, fmt.Errorf("register web transport: %w", err)

@@ -32,6 +32,22 @@ type Config struct {
 		RequestTimeoutMS int    `yaml:"request_timeout_ms"`
 		ShutdownTimeoutS int    `yaml:"shutdown_timeout_s"`
 		MaxBodyBytes     int64  `yaml:"max_body_bytes"`
+		Auth             struct {
+			Mode                     string `yaml:"mode"`
+			AllowLegacySubjectHeader bool   `yaml:"allow_legacy_subject_header"`
+			Tokens                   []struct {
+				ID          string   `yaml:"id"`
+				TokenSHA256 string   `yaml:"token_sha256"`
+				Subject     string   `yaml:"subject"`
+				Roles       []string `yaml:"roles"`
+				Enabled     bool     `yaml:"enabled"`
+			} `yaml:"tokens"`
+		} `yaml:"auth"`
+		CORS struct {
+			AllowedOrigins []string `yaml:"allowed_origins"`
+			AllowedMethods []string `yaml:"allowed_methods"`
+			AllowedHeaders []string `yaml:"allowed_headers"`
+		} `yaml:"cors"`
 	} `yaml:"web"`
 	LLM struct {
 		Enabled       bool     `yaml:"enabled"`
@@ -55,6 +71,10 @@ func Default() Config {
 	cfg.Web.RequestTimeoutMS = 3000
 	cfg.Web.ShutdownTimeoutS = 5
 	cfg.Web.MaxBodyBytes = 1 << 20
+	cfg.Web.Auth.Mode = "bearer"
+	cfg.Web.Auth.AllowLegacySubjectHeader = true
+	cfg.Web.CORS.AllowedMethods = []string{"GET", "POST", "OPTIONS"}
+	cfg.Web.CORS.AllowedHeaders = []string{"Authorization", "Content-Type", "X-Request-ID"}
 	cfg.LLM.ProviderOrder = []string{"local", "cloud"}
 	cfg.LLM.TimeoutMS = 2000
 	cfg.Security.AuthAllowlist = map[string][]string{"telegram": {}, "maxbot": {}, "web": {}}
