@@ -10,6 +10,9 @@ import (
 	"goadmin/internal/modules/host"
 	"goadmin/internal/storage"
 	"goadmin/internal/storage/sqlite"
+	"goadmin/internal/transports/common"
+	"goadmin/internal/transports/maxbot"
+	"goadmin/internal/transports/telegram"
 )
 
 // App агрегирует зависимости ядра.
@@ -33,10 +36,23 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("open storage: %w", err)
 	}
 
+	authz := core.NewAllowlistAuthorizer(cfg.Security.AuthAllowlist)
+	transports := core.NewTransportManager()
+	limiter := common.NewRateLimiter(5, time.Second)
+
+	tg := telegram.NewAdapter(r, authz, limiter)
+	mx := maxbot.NewAdapter(r, authz, limiter)
+	if err := transports.Register(tg); err != nil {
+		return nil, fmt.Errorf("register telegram transport: %w", err)
+	}
+	if err := transports.Register(mx); err != nil {
+		return nil, fmt.Errorf("register maxbot transport: %w", err)
+	}
+
 	return &App{
 		Registry:   r,
-		Transports: core.NewTransportManager(),
-		Authorizer: core.NewAllowlistAuthorizer(cfg.Security.AuthAllowlist),
+		Transports: transports,
+		Authorizer: authz,
 		Store:      st,
 		Config:     cfg,
 	}, nil
@@ -52,6 +68,15 @@ func (a *App) Close() error {
 
 // Serve запускает планировщик периодического сбора метрик.
 func (a *App) Serve(ctx context.Context) error {
+	if err := a.Transports.StartAll(ctx); err != nil {
+		return fmt.Errorf("start transports: %w", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = a.Transports.StopAll(stopCtx)
+	}()
+
 	interval := time.Duration(a.Config.Scheduler.IntervalSeconds) * time.Second
 	if interval <= 0 {
 		interval = time.Minute
