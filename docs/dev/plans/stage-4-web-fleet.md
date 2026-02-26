@@ -4,6 +4,15 @@
 
 Добавить HTTP API и встроенный UI (через `go:embed`) для локального контроля агента и базовых fleet-операций, не нарушая изоляцию core.
 
+## Статус реализации (2026-02-26)
+
+- Выполнен стартовый каркас `internal/transports/web` с lifecycle `Start/Stop`.
+- Реализованы базовые endpoint'ы v1: `health`, `commands/execute`, `metrics/latest`, `audit`.
+- Для API реализован middleware hardening:
+  - auth через `X-Subject-ID` в middleware;
+  - сквозной `request_id` через `X-Request-ID` (или генерация сервером);
+  - общий request-timeout middleware и body-size limit middleware.
+
 ## 2. Scope
 
 ### In Scope

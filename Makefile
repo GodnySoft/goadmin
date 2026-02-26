@@ -16,9 +16,11 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LD_FLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 GO_TARBALL ?= https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
+GO_TARBALL_LOCAL ?= /tmp/go.tgz
 GO_DST ?= $(CURDIR)/.local/go
 GO_BIN_DIR := $(dir $(GO))
 ENV_VARS := PATH=$(GO_BIN_DIR):$(PATH) GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) GOPROXY=$(GOPROXY) GOSUMDB=$(GOSUMDB) HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= http_proxy= https_proxy= all_proxy= ftp_proxy= FTP_PROXY=
+ENV_VARS := $(ENV_VARS) GOLANGCI_LINT_CACHE=$(CURDIR)/.cache/golangci-lint
 
 .PHONY: all check fmt lint test race sec tidy build run serve deps tools go-check clean go-install
 
@@ -73,11 +75,18 @@ go-check:
 
 # Локальная установка Go в .local/go
 go-install:
-	@mkdir -p $(GO_DST)
-	@echo "Скачиваю Go в $(GO_DST)"
-	curl -L $(GO_TARBALL) -o /tmp/go.tgz
-	tar -C $(CURDIR)/.local -xzf /tmp/go.tgz
-	rm -f /tmp/go.tgz
+	@mkdir -p $(CURDIR)/.local
+	@if [ -f "$(GO_TARBALL_LOCAL)" ]; then \
+		echo "Использую локальный архив Go: $(GO_TARBALL_LOCAL)"; \
+		tar -C $(CURDIR)/.local -xzf "$(GO_TARBALL_LOCAL)"; \
+	else \
+		echo "Скачиваю Go из $(GO_TARBALL)"; \
+		env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy -u ftp_proxy -u FTP_PROXY \
+			curl --fail --location --retry 3 "$(GO_TARBALL)" -o /tmp/go.tgz && \
+		tar -C $(CURDIR)/.local -xzf /tmp/go.tgz && \
+		rm -f /tmp/go.tgz; \
+	fi
+	@$(CURDIR)/.local/go/bin/go version
 
 clean:
 	rm -rf bin

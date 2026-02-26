@@ -24,6 +24,15 @@ type Config struct {
 	Scheduler struct {
 		IntervalSeconds int `yaml:"interval_seconds"`
 	} `yaml:"scheduler"`
+	Web struct {
+		Enabled          bool   `yaml:"enabled"`
+		ListenAddr       string `yaml:"listen_addr"`
+		ReadTimeoutMS    int    `yaml:"read_timeout_ms"`
+		WriteTimeoutMS   int    `yaml:"write_timeout_ms"`
+		RequestTimeoutMS int    `yaml:"request_timeout_ms"`
+		ShutdownTimeoutS int    `yaml:"shutdown_timeout_s"`
+		MaxBodyBytes     int64  `yaml:"max_body_bytes"`
+	} `yaml:"web"`
 	LLM struct {
 		Enabled       bool     `yaml:"enabled"`
 		ProviderOrder []string `yaml:"provider_order"`
@@ -39,9 +48,16 @@ func Default() Config {
 	cfg.SQLite.Path = "/var/lib/goadmin/state.db"
 	cfg.SQLite.RetentionDays = 30
 	cfg.Scheduler.IntervalSeconds = 60
+	cfg.Web.Enabled = false
+	cfg.Web.ListenAddr = "127.0.0.1:8080"
+	cfg.Web.ReadTimeoutMS = 2000
+	cfg.Web.WriteTimeoutMS = 5000
+	cfg.Web.RequestTimeoutMS = 3000
+	cfg.Web.ShutdownTimeoutS = 5
+	cfg.Web.MaxBodyBytes = 1 << 20
 	cfg.LLM.ProviderOrder = []string{"local", "cloud"}
 	cfg.LLM.TimeoutMS = 2000
-	cfg.Security.AuthAllowlist = map[string][]string{"telegram": {}, "maxbot": {}}
+	cfg.Security.AuthAllowlist = map[string][]string{"telegram": {}, "maxbot": {}, "web": {}}
 	return cfg
 }
 

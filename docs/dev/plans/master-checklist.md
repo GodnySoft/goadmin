@@ -1,5 +1,16 @@
 # Master Checklist — Сквозные условия выполнения и проверки
 
+## 0. Текущий статус работ (обновлено: 2026-02-26)
+
+- [x] Подготовлен Makefile с целями для локальной разработки и проверок качества.
+- [x] Подготовлена инструкция развёртывания окружения для разработки через Ansible.
+- [x] Реализован core-пайплайн command -> authz -> ratelimit -> module execution.
+- [x] Добавлены transport-адаптеры Telegram/MaxBot (скелеты) с общим пайплайном.
+- [x] Реализовано хранение метрик и аудита в SQLite.
+- [x] Добавлен аудит событий в messaging-пайплайн (status: ok/error/denied/rate_limited).
+- [x] Добавлены базовые интеграционные и unit-тесты для transport-пайплайна.
+- [x] Начата реализация Stage 4: добавлен базовый Web transport (`/v1/health`, execute, latest metrics, audit).
+
 ## 1. Глобальные quality gates (каждый этап)
 
 - [ ] `golangci-lint run ./...` без ошибок.

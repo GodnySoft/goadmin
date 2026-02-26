@@ -13,8 +13,9 @@
   Go распакуется в `.local/go`. Версия управляется переменной `GO_TARBALL` в Makefile.
 - Если интернета нет: положите заранее `go1.22.0.linux-amd64.tar.gz` в `/tmp/go.tgz` и выполните:
   ```bash
-  tar -C .local -xzf /tmp/go.tgz
+  make go-install
   ```
+  По умолчанию `make go-install` ищет локальный архив в `/tmp/go.tgz` (`GO_TARBALL_LOCAL`).
 
 2) Настройка локальных кешей
 - Makefile уже задаёт локальные пути:
