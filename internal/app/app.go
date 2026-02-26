@@ -40,8 +40,9 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 	transports := core.NewTransportManager()
 	limiter := common.NewRateLimiter(5, time.Second)
 
-	tg := telegram.NewAdapter(r, authz, limiter)
-	mx := maxbot.NewAdapter(r, authz, limiter)
+	audit := st
+	tg := telegram.NewAdapter(r, authz, limiter, audit)
+	mx := maxbot.NewAdapter(r, authz, limiter, audit)
 	if err := transports.Register(tg); err != nil {
 		return nil, fmt.Errorf("register telegram transport: %w", err)
 	}

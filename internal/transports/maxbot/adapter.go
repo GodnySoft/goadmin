@@ -16,13 +16,14 @@ type Adapter struct {
 }
 
 // NewAdapter создает MaxBot адаптер.
-func NewAdapter(registry *core.Registry, authorizer core.Authorizer, limiter *common.RateLimiter) *Adapter {
+func NewAdapter(registry *core.Registry, authorizer core.Authorizer, limiter *common.RateLimiter, audit common.AuditSink) *Adapter {
 	return &Adapter{
 		svc: &common.Service{
 			Source:      "maxbot",
 			Registry:    registry,
 			Authorizer:  authorizer,
 			RateLimiter: limiter,
+			AuditSink:   audit,
 		},
 	}
 }

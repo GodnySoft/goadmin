@@ -81,6 +81,11 @@ func (s *Store) SaveAudit(ctx context.Context, ev storage.AuditEvent) error {
 	return nil
 }
 
+// Write реализует общий AuditSink интерфейс.
+func (s *Store) Write(ctx context.Context, ev storage.AuditEvent) error {
+	return s.SaveAudit(ctx, ev)
+}
+
 // Close закрывает соединение.
 func (s *Store) Close() error {
 	return s.db.Close()

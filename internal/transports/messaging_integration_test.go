@@ -29,7 +29,7 @@ func TestTelegramTransportPipeline(t *testing.T) {
 	}
 	authz := core.NewAllowlistAuthorizer(map[string][]string{"telegram": {"1001"}})
 	limiter := common.NewRateLimiter(1, time.Second)
-	tr := telegram.NewAdapter(r, authz, limiter)
+	tr := telegram.NewAdapter(r, authz, limiter, nil)
 
 	resp, err := tr.HandleCommand(ctx, "1001", "/host status")
 	if err != nil {
