@@ -1,0 +1,45 @@
+agent:
+  mode: daemon
+  log_level: info
+
+security:
+  exec_allowlist: []
+  auth_allowlist:
+    telegram: []
+    maxbot: []
+    web: []
+
+sqlite:
+  path: /var/lib/goadmin/state.db
+  retention_days: 30
+
+scheduler:
+  interval_seconds: 60
+
+web:
+  enabled: true
+  listen_addr: 127.0.0.1:8080
+  read_timeout_ms: 2000
+  write_timeout_ms: 5000
+  request_timeout_ms: 3000
+  shutdown_timeout_s: 5
+  max_body_bytes: 1048576
+  auth:
+    mode: bearer
+    allow_legacy_subject_header: false
+    tokens:
+      - id: react-ui
+        token_sha256: "REPLACE_WITH_SHA256"
+        subject: ui-admin
+        roles: ["admin"]
+        enabled: true
+  cors:
+    allowed_origins:
+      - https://goadmin-ui.example.com
+    allowed_methods: ["GET", "POST", "OPTIONS"]
+    allowed_headers: ["Authorization", "Content-Type", "X-Request-ID"]
+
+llm:
+  enabled: false
+  provider_order: ["local", "cloud"]
+  timeout_ms: 2000

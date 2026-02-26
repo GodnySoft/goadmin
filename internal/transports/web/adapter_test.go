@@ -231,6 +231,62 @@ func TestLatestMetricEndpoint(t *testing.T) {
 	}
 }
 
+func TestMeEndpointContainsSubjectRolesAndAuthMethod(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+
+	var resp struct {
+		Subject    string   `json:"subject"`
+		Roles      []string `json:"roles"`
+		AuthMethod string   `json:"auth_method"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Subject != "u1" {
+		t.Fatalf("expected subject u1, got %q", resp.Subject)
+	}
+	if resp.AuthMethod != "bearer" {
+		t.Fatalf("expected auth_method bearer, got %q", resp.AuthMethod)
+	}
+	if len(resp.Roles) == 0 || resp.Roles[0] != "admin" {
+		t.Fatalf("expected roles to include admin, got %#v", resp.Roles)
+	}
+}
+
+func TestAuthModeLegacyHeaderForcesHeaderFlow(t *testing.T) {
+	adapter := newTestAdapter(t, false, Config{
+		AuthMode:                 "legacy_header",
+		AllowLegacySubjectHeader: false,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
+	rr := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 when legacy mode ignores bearer, got %d", rr.Code)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	req2.Header.Set("X-Subject-ID", "u1")
+	rr2 := httptest.NewRecorder()
+	adapter.routes().ServeHTTP(rr2, req2)
+
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("expected status 200 with legacy header, got %d", rr2.Code)
+	}
+}
+
 func TestCORSPreflight(t *testing.T) {
 	adapter := newTestAdapter(t, false, Config{CORSAllowedOrigins: []string{"https://ui.local"}})
 	req := httptest.NewRequest(http.MethodOptions, "/v1/commands/execute", nil)

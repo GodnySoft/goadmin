@@ -38,6 +38,7 @@
 - `internal/transports/web` с безопасными middleware и bearer auth.
 - OpenAPI контракт v1 (`docs/dev/api/openapi-v1.yaml`).
 - Документация интеграции frontend/backend (`docs/dev/api/frontend-integration.md`).
+- Production-пример конфига web auth/cors (`configs/config.prod.example.yaml`).
 - Contract tests для совместимости API.
 
 ## 5. Backlog этапа

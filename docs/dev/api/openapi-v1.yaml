@@ -5,6 +5,7 @@ info:
   description: |
     Контракт API для внешнего React-интерфейса.
     UI разворачивается отдельно от goadmin.
+    Legacy режим `X-Subject-ID` допускается только для обратной совместимости и должен быть отключен в production.
 servers:
   - url: http://127.0.0.1:8080
 components:

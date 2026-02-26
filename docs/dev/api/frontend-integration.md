@@ -10,6 +10,14 @@ Frontend (`React`) разрабатывается и разворачивает�
 - Основной режим: `Authorization: Bearer <token>`.
 - Legacy fallback (временный): `X-Subject-ID` при `web.auth.allow_legacy_subject_header=true`.
 - Для production рекомендуется отключить legacy-header и использовать только bearer.
+- Хэш токена хранится в конфиге (`token_sha256`), а не сам токен.
+
+Пример генерации SHA-256 токена:
+
+```bash
+TOKEN='replace-me'
+printf '%s' "$TOKEN" | sha256sum | awk '{print $1}'
+```
 
 ## CORS
 
@@ -31,6 +39,29 @@ Frontend (`React`) разрабатывается и разворачивает�
 - `GET /v1/metrics/latest?module=host` — последние метрики.
 - `GET /v1/audit?...` — аудит.
 - `POST /v1/commands/execute` — исполнение команды.
+
+## Примеры запросов
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $GOADMIN_TOKEN" \
+  -H "X-Request-ID: ui-req-001" \
+  http://127.0.0.1:8080/v1/me
+```
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $GOADMIN_TOKEN" \
+  "http://127.0.0.1:8080/v1/metrics/latest?module=host"
+```
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer $GOADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"module":"host","command":"status","args":[]}' \
+  http://127.0.0.1:8080/v1/commands/execute
+```
 
 ## Ошибки
 
