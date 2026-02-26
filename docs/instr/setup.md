@@ -20,7 +20,7 @@
 - Makefile уже задаёт локальные пути:
   - `GOCACHE=.cache/go-build`
   - `GOMODCACHE=.cache/gomod`
-- Переменные передаются во все команды через `ENV_VARS`.
+- Переменные и `PATH` (с локальным `go`) передаются во все команды через `ENV_VARS`.
 
 3) Установка тулов
 ```bash
@@ -36,12 +36,18 @@ make run      # вывод версии
 make serve    # запуск демона
 ```
 
+Дополнительно:
+```bash
+make sec      # gosec только по ./cmd ./internal ./pkg
+```
+
 5) Офлайн-модули (если нет интернета)
 - Скачайте необходимые модули и сложите в `.cache/gomod` согласно структуре Go proxy (пример для gopsutil):
   - `.cache/gomod/github.com/shirou/gopsutil/v3/@v/v3.24.1.zip`
   - `.cache/gomod/github.com/shirou/gopsutil/v3/@v/v3.24.1.mod`
   - `.cache/gomod/github.com/shirou/gopsutil/v3/@v/v3.24.1.info`
 - Затем запустите:
+- Для strict офлайн режима:
   ```bash
   GOPROXY=file://$(pwd)/.cache/gomod,off GOSUMDB=off make tidy
   ```

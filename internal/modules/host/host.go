@@ -44,18 +44,18 @@ func (m *Module) status(ctx context.Context) (core.Response, error) {
 		return core.Response{Status: "error", ErrorCode: "load_info_failed"}, fmt.Errorf("load info: %w", err)
 	}
 	resp := map[string]interface{}{
-		"hostname":   hInfo.Hostname,
-		"platform":   hInfo.Platform,
-		"platformVer": hInfo.PlatformVersion,
-		"kernel":     hInfo.KernelVersion,
-		"uptime_sec": hInfo.Uptime,
-		"boot_time":  time.Unix(int64(hInfo.BootTime), 0).UTC().Format(time.RFC3339),
-		"mem_total":  vm.Total,
-		"mem_used":   vm.Used,
+		"hostname":     hInfo.Hostname,
+		"platform":     hInfo.Platform,
+		"platformVer":  hInfo.PlatformVersion,
+		"kernel":       hInfo.KernelVersion,
+		"uptime_sec":   hInfo.Uptime,
+		"boot_time":    time.Unix(int64(hInfo.BootTime), 0).UTC().Format(time.RFC3339),
+		"mem_total":    vm.Total,
+		"mem_used":     vm.Used,
 		"mem_used_pct": vm.UsedPercent,
-		"load1":      ld.Load1,
-		"load5":      ld.Load5,
-		"load15":     ld.Load15,
+		"load1":        ld.Load1,
+		"load5":        ld.Load5,
+		"load15":       ld.Load15,
 	}
 	return core.Response{Status: "ok", Data: resp}, nil
 }

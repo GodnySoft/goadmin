@@ -10,7 +10,8 @@
 - переменные окружения в `.bashrc` пользователя разработки;
 - очистка прокси-переменных (опционально);
 - предзагрузка офлайн-зависимостей (`utils/fetch-mods.sh`);
-- запуск `make tidy` в офлайн-режиме.
+- прогрев mod-cache online (`go mod download`);
+- запуск `make tidy` в online-режиме по умолчанию (offline опционален).
 
 ## Файлы Ansible
 - `deployments/ansible/ansible.cfg`
@@ -60,4 +61,4 @@ make test
 ## Примечания
 - Если `ansible-playbook` отсутствует, установите Ansible на управляющей машине.
 - При ограниченной сети включайте предзагрузку модулей (`goadmin_prefetch_modules: true`).
-- При полностью офлайн-среде заранее подготовьте `.cache/gomod` и отключите `goadmin_run_make_tidy` на первом прогоне.
+- При полностью офлайн-среде заранее подготовьте `.cache/gomod`, включите `goadmin_tidy_offline: true`, и при необходимости отключите `goadmin_run_make_tidy` на первом прогоне.

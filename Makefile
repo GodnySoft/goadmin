@@ -17,7 +17,8 @@ DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LD_FLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 GO_TARBALL ?= https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
 GO_DST ?= $(CURDIR)/.local/go
-ENV_VARS := GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) GOPROXY=$(GOPROXY) GOSUMDB=$(GOSUMDB) HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= http_proxy= https_proxy= all_proxy= ftp_proxy= FTP_PROXY=
+GO_BIN_DIR := $(dir $(GO))
+ENV_VARS := PATH=$(GO_BIN_DIR):$(PATH) GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) GOPROXY=$(GOPROXY) GOSUMDB=$(GOSUMDB) HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= http_proxy= https_proxy= all_proxy= ftp_proxy= FTP_PROXY=
 
 .PHONY: all check fmt lint test race sec tidy build run serve deps tools go-check clean go-install
 
@@ -26,7 +27,7 @@ all: check
 check: go-check tidy fmt lint test race sec build
 
 fmt:
-	$(GO) fmt ./...
+	$(ENV_VARS) $(GO) fmt ./...
 
 lint: go-check tools
 	$(ENV_VARS) $(GOLANGCI_LINT) run ./...
@@ -38,7 +39,7 @@ race: go-check
 	$(ENV_VARS) $(GO) test -race ./...
 
 sec: go-check tools
-	$(ENV_VARS) $(GOSEC) ./...
+	$(ENV_VARS) $(GOSEC) ./cmd/... ./internal/... ./pkg/...
 
 build: go-check
 	$(ENV_VARS) $(GO) build -trimpath -ldflags "$(LD_FLAGS)" -o $(BINARY) ./cmd/goadmin

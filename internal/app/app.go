@@ -14,9 +14,11 @@ import (
 
 // App агрегирует зависимости ядра.
 type App struct {
-	Registry *core.Registry
-	Store    storage.Store
-	Config   config.Config
+	Registry   *core.Registry
+	Transports *core.TransportManager
+	Authorizer core.Authorizer
+	Store      storage.Store
+	Config     config.Config
 }
 
 // NewApp строит приложение: реестр модулей и хранилище.
@@ -31,7 +33,13 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("open storage: %w", err)
 	}
 
-	return &App{Registry: r, Store: st, Config: cfg}, nil
+	return &App{
+		Registry:   r,
+		Transports: core.NewTransportManager(),
+		Authorizer: core.NewAllowlistAuthorizer(cfg.Security.AuthAllowlist),
+		Store:      st,
+		Config:     cfg,
+	}, nil
 }
 
 // Close высвобождает ресурсы приложения.

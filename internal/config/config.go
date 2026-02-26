@@ -51,7 +51,7 @@ func Load(path string) (Config, error) {
 	if path == "" {
 		return cfg, nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- путь к конфигу задается доверенным оператором/CI.
 	if err != nil {
 		return cfg, err
 	}

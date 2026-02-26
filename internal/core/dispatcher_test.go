@@ -11,7 +11,7 @@ type fakeProvider struct {
 	execErr error
 }
 
-func (f *fakeProvider) Name() string { return f.name }
+func (f *fakeProvider) Name() string                   { return f.name }
 func (f *fakeProvider) Init(ctx context.Context) error { return nil }
 func (f *fakeProvider) Execute(ctx context.Context, cmd string, args []string) (Response, error) {
 	if f.execErr != nil {
