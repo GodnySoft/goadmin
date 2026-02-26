@@ -1,0 +1,7 @@
+/bin/
+bin/
+*.log
+*.tmp
+/.idea/
+/.vscode/
+.DS_Store

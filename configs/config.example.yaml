@@ -1,0 +1,21 @@
+agent:
+  mode: cli # cli|daemon
+  log_level: info
+
+security:
+  exec_allowlist: []
+  auth_allowlist:
+    telegram: []
+    maxbot: []
+
+sqlite:
+  path: /var/lib/goadmin/state.db
+  retention_days: 30
+
+scheduler:
+  interval_seconds: 60
+
+llm:
+  enabled: false
+  provider_order: ["local", "cloud"]
+  timeout_ms: 2000
