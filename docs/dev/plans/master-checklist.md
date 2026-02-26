@@ -15,13 +15,16 @@
 - [x] Зафиксирована модель external React UI (без `go:embed`) и документ интеграции frontend/backend.
 - [x] Для web API добавлены bearer auth, CORS allowlist и endpoint'ы `/v1/me`, `/v1/modules`.
 - [x] Добавлен встроенный генератор SBOM (`make sbom`) и документирован процесс публикации.
+- [x] Проведен baseline load-test web API (`/v1/metrics/latest` @ 100 RPS) и зафиксированы метрики.
+- [x] Зафиксированы и внедрены ограничения JSON schema для `POST /v1/commands/execute`.
+- [x] Добавлены production-пример конфига и smoke/deploy/rollback runbook'и для React-интеграции.
 
 ## 1. Глобальные quality gates (каждый этап)
 
-- [ ] `golangci-lint run ./...` без ошибок.
-- [ ] `go test ./...` успешно.
-- [ ] `go test -race ./...` успешно.
-- [ ] `gosec ./...` без critical/high.
+- [x] `golangci-lint run ./...` без ошибок.
+- [x] `go test ./...` успешно.
+- [x] `go test -race ./...` успешно.
+- [x] `gosec ./...` без critical/high.
 - [x] SBOM сформирован и приложен к артефакту релиза.
 
 ## 2. Архитектурные инварианты
