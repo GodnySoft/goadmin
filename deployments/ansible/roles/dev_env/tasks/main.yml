@@ -1,0 +1,175 @@
+---
+- name: Validate target OS
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+      - ansible_facts['distribution'] == 'Ubuntu'
+    fail_msg: "This role currently supports Ubuntu only."
+
+- name: Ensure development user exists
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ goadmin_dev_user }}"
+
+- name: Resolve development user home
+  ansible.builtin.set_fact:
+    goadmin_dev_home: "{{ ansible_facts.getent_passwd[goadmin_dev_user][4] }}"
+
+- name: Ensure project root exists
+  ansible.builtin.stat:
+    path: "{{ goadmin_project_root }}"
+  register: goadmin_root_stat
+
+- name: Fail when project root is missing
+  ansible.builtin.assert:
+    that:
+      - goadmin_root_stat.stat.exists
+      - goadmin_root_stat.stat.isdir
+    fail_msg: "Project root {{ goadmin_project_root }} does not exist on target host."
+
+- name: Install system packages for development
+  ansible.builtin.apt:
+    name: "{{ goadmin_dev_packages }}"
+    state: present
+    update_cache: true
+  become: true
+  when:
+    - goadmin_install_system_packages | bool
+    - goadmin_dev_packages | length > 0
+
+- name: Ensure local tool/cache directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ goadmin_dev_user }}"
+    group: "{{ goadmin_dev_user }}"
+  loop:
+    - "{{ goadmin_go_local_dir }}"
+    - "{{ goadmin_gocache }}"
+    - "{{ goadmin_gomodcache }}"
+
+- name: Check existing local Go binary
+  ansible.builtin.stat:
+    path: "{{ goadmin_go_install_dir }}/bin/go"
+  register: goadmin_go_bin_stat
+
+- name: Download Go tarball
+  ansible.builtin.get_url:
+    url: "{{ goadmin_go_tarball_url }}"
+    dest: "{{ goadmin_go_archive_path }}"
+    mode: "0644"
+    force: false
+  when: not goadmin_go_bin_stat.stat.exists
+
+- name: Remove previous local Go install
+  ansible.builtin.file:
+    path: "{{ goadmin_go_install_dir }}"
+    state: absent
+  when: not goadmin_go_bin_stat.stat.exists
+
+- name: Extract Go locally in project
+  ansible.builtin.unarchive:
+    src: "{{ goadmin_go_archive_path }}"
+    dest: "{{ goadmin_go_local_dir }}"
+    remote_src: true
+    owner: "{{ goadmin_dev_user }}"
+    group: "{{ goadmin_dev_user }}"
+  when: not goadmin_go_bin_stat.stat.exists
+
+- name: Ensure Go environment in user bashrc
+  ansible.builtin.blockinfile:
+    path: "{{ goadmin_dev_home }}/.bashrc"
+    marker: "# {mark} GOADMIN DEV ENV"
+    block: |
+      export PATH="{{ goadmin_go_install_dir }}/bin:$PATH"
+      export GOCACHE="{{ goadmin_gocache }}"
+      export GOMODCACHE="{{ goadmin_gomodcache }}"
+      export GOPROXY="https://proxy.golang.org"
+      export GOSUMDB="sum.golang.org"
+
+- name: Remove proxy variables from user bashrc
+  ansible.builtin.lineinfile:
+    path: "{{ goadmin_dev_home }}/.bashrc"
+    regexp: "^(export )?(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|http_proxy|https_proxy|all_proxy|FTP_PROXY|ftp_proxy)="
+    state: absent
+  when: goadmin_unset_proxy_in_bashrc | bool
+
+- name: Run offline dependency prefetch script
+  ansible.builtin.command:
+    cmd: "./utils/fetch-mods.sh"
+    chdir: "{{ goadmin_project_root }}"
+  environment:
+    BASE_URL: "https://proxy.golang.org"
+    HTTP_PROXY: ""
+    HTTPS_PROXY: ""
+    ALL_PROXY: ""
+    http_proxy: ""
+    https_proxy: ""
+    all_proxy: ""
+    ftp_proxy: ""
+    FTP_PROXY: ""
+  when: goadmin_prefetch_modules | bool
+
+- name: Warm module cache online
+  ansible.builtin.command:
+    cmd: "{{ goadmin_go_install_dir }}/bin/go mod download"
+    chdir: "{{ goadmin_project_root }}"
+  environment:
+    GOCACHE: "{{ goadmin_gocache }}"
+    GOMODCACHE: "{{ goadmin_gomodcache }}"
+    GOPROXY: "https://proxy.golang.org"
+    GOSUMDB: "sum.golang.org"
+    HTTP_PROXY: ""
+    HTTPS_PROXY: ""
+    ALL_PROXY: ""
+    http_proxy: ""
+    https_proxy: ""
+    all_proxy: ""
+    ftp_proxy: ""
+    FTP_PROXY: ""
+  when: goadmin_warm_modcache_online | bool
+
+- name: Run make tidy in online mode
+  ansible.builtin.command:
+    cmd: "make tidy"
+    chdir: "{{ goadmin_project_root }}"
+  environment:
+    GO: "{{ goadmin_go_install_dir }}/bin/go"
+    GOCACHE: "{{ goadmin_gocache }}"
+    GOMODCACHE: "{{ goadmin_gomodcache }}"
+    GOPROXY: "https://proxy.golang.org"
+    GOSUMDB: "sum.golang.org"
+    HTTP_PROXY: ""
+    HTTPS_PROXY: ""
+    ALL_PROXY: ""
+    http_proxy: ""
+    https_proxy: ""
+    all_proxy: ""
+    ftp_proxy: ""
+    FTP_PROXY: ""
+  when:
+    - goadmin_run_make_tidy | bool
+    - not goadmin_tidy_offline | bool
+
+- name: Run make tidy in offline mode
+  ansible.builtin.command:
+    cmd: "make tidy"
+    chdir: "{{ goadmin_project_root }}"
+  environment:
+    GO: "{{ goadmin_go_install_dir }}/bin/go"
+    GOCACHE: "{{ goadmin_gocache }}"
+    GOMODCACHE: "{{ goadmin_gomodcache }}"
+    GOPROXY: "file://{{ goadmin_gomodcache }},off"
+    GOSUMDB: "off"
+    HTTP_PROXY: ""
+    HTTPS_PROXY: ""
+    ALL_PROXY: ""
+    http_proxy: ""
+    https_proxy: ""
+    all_proxy: ""
+    ftp_proxy: ""
+    FTP_PROXY: ""
+  when:
+    - goadmin_run_make_tidy | bool
+    - goadmin_tidy_offline | bool

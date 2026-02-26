@@ -28,3 +28,8 @@
 - Безопасность: Zero-Trust, deny-by-default.
 - Надежность: graceful shutdown, отсутствие утечек горутин.
 - Качество: `golangci-lint`, `go test`, `-race`, `gosec`, SBOM.
+
+## Связанные инструкции
+
+- Развертывание dev-окружения через Ansible: `docs/dev/instr/ansible-dev-setup.md`
+- Операционная инструкция по setup: `docs/instr/ansible-dev.md`

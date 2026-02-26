@@ -1,0 +1,32 @@
+# Путь к репозиторию на целевой машине.
+goadmin_project_root: "/home/nsadmin/OSNOVA/soft/goadmin"
+# Пользователь разработки.
+goadmin_dev_user: "nsadmin"
+
+# Версия Go для локальной установки (без установки в /usr/local).
+goadmin_go_version: "1.22.0"
+goadmin_go_tarball_url: "https://go.dev/dl/go{{ goadmin_go_version }}.linux-amd64.tar.gz"
+
+# Базовые пакеты для разработки и сборки cgo (sqlite3).
+goadmin_dev_packages:
+  - curl
+  - git
+  - make
+  - tar
+  - gzip
+  - ca-certificates
+  - build-essential
+  - pkg-config
+  - gcc
+  - g++
+  - sqlite3
+  - libsqlite3-dev
+
+# Если true, роль удаляет прокси-переменные из ~/.bashrc пользователя.
+goadmin_unset_proxy_in_bashrc: true
+
+# Если true, роль подкачивает офлайн-зависимости через utils/fetch-mods.sh.
+goadmin_prefetch_modules: true
+
+# Если true, роль запускает make tidy после подготовки окружения.
+goadmin_run_make_tidy: true

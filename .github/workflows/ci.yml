@@ -21,7 +21,7 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: Install linters
+      - name: Install tools
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.56.2
           go install github.com/securego/gosec/v2/cmd/gosec@v2.19.0
@@ -35,3 +35,5 @@ jobs:
         run: go test -race ./...
       - name: Gosec
         run: gosec ./...
+      - name: Build
+        run: go build -trimpath -ldflags "-s -w" -o bin/goadmin ./cmd/goadmin

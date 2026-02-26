@@ -2,6 +2,10 @@
 bin/
 *.log
 *.tmp
+/.cache/
+/.local/
+/.ansible/
+/utils/diag/out/
 /.idea/
 /.vscode/
 .DS_Store

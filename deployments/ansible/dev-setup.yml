@@ -1,0 +1,6 @@
+---
+- name: Prepare goadmin development environment
+  hosts: dev_local
+  gather_facts: true
+  roles:
+    - role: dev_env

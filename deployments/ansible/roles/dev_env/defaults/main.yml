@@ -1,0 +1,22 @@
+---
+goadmin_project_root: "/opt/goadmin"
+goadmin_dev_user: "{{ ansible_user_id | default('root') }}"
+
+# Локальная установка Go в пределах репозитория.
+goadmin_go_version: "1.22.0"
+goadmin_go_tarball_url: "https://go.dev/dl/go{{ goadmin_go_version }}.linux-amd64.tar.gz"
+goadmin_go_archive_path: "/tmp/goadmin-go.tar.gz"
+goadmin_go_local_dir: "{{ goadmin_project_root }}/.local"
+goadmin_go_install_dir: "{{ goadmin_go_local_dir }}/go"
+
+# Кеши Go внутри репозитория.
+goadmin_gocache: "{{ goadmin_project_root }}/.cache/go-build"
+goadmin_gomodcache: "{{ goadmin_project_root }}/.cache/gomod"
+
+goadmin_dev_packages: []
+goadmin_install_system_packages: true
+goadmin_unset_proxy_in_bashrc: true
+goadmin_prefetch_modules: true
+goadmin_warm_modcache_online: true
+goadmin_run_make_tidy: true
+goadmin_tidy_offline: false
