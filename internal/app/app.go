@@ -69,6 +69,7 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 			RequestTimeout:           time.Duration(cfg.Web.RequestTimeoutMS) * time.Millisecond,
 			ShutdownTimeout:          time.Duration(cfg.Web.ShutdownTimeoutS) * time.Second,
 			MaxRequestBody:           cfg.Web.MaxBodyBytes,
+			AuthMode:                 cfg.Web.Auth.Mode,
 			AllowLegacySubjectHeader: cfg.Web.Auth.AllowLegacySubjectHeader,
 			Tokens:                   tokens,
 			CORSAllowedOrigins:       cfg.Web.CORS.AllowedOrigins,

@@ -46,6 +46,7 @@ type Config struct {
 	ShutdownTimeout          time.Duration
 	RequestTimeout           time.Duration
 	MaxRequestBody           int64
+	AuthMode                 string
 	AllowLegacySubjectHeader bool
 	Tokens                   []TokenEntry
 	CORSAllowedOrigins       []string
@@ -92,6 +93,9 @@ func NewAdapter(registry *core.Registry, authorizer core.Authorizer, store stora
 	}
 	if cfg.MaxRequestBody <= 0 {
 		cfg.MaxRequestBody = 1 << 20
+	}
+	if strings.TrimSpace(cfg.AuthMode) == "" {
+		cfg.AuthMode = "bearer"
 	}
 	if len(cfg.CORSAllowedMethods) == 0 {
 		cfg.CORSAllowedMethods = []string{"GET", "POST", "OPTIONS"}
@@ -315,23 +319,30 @@ func (a *Adapter) authSubjectMiddleware() middleware {
 }
 
 func (a *Adapter) resolveSubject(r *http.Request) (string, []string, string, string) {
-	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-	if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-		token := strings.TrimSpace(authHeader[7:])
-		if token == "" {
-			return "", nil, "", "invalid_token"
-		}
-		sum := sha256.Sum256([]byte(token))
-		hash := hex.EncodeToString(sum[:])
-		entry, ok := a.tokensByHash[hash]
-		if !ok || !entry.Enabled || entry.Subject == "" {
-			return "", nil, "", "invalid_token"
-		}
-		roles := append([]string(nil), entry.Roles...)
-		return entry.Subject, roles, "bearer", ""
+	mode := strings.ToLower(strings.TrimSpace(a.cfg.AuthMode))
+	if mode == "" {
+		mode = "bearer"
 	}
 
-	if a.cfg.AllowLegacySubjectHeader {
+	if mode != "legacy_header" {
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			token := strings.TrimSpace(authHeader[7:])
+			if token == "" {
+				return "", nil, "", "invalid_token"
+			}
+			sum := sha256.Sum256([]byte(token))
+			hash := hex.EncodeToString(sum[:])
+			entry, ok := a.tokensByHash[hash]
+			if !ok || !entry.Enabled || entry.Subject == "" {
+				return "", nil, "", "invalid_token"
+			}
+			roles := append([]string(nil), entry.Roles...)
+			return entry.Subject, roles, "bearer", ""
+		}
+	}
+
+	if a.cfg.AllowLegacySubjectHeader || mode == "legacy_header" {
 		subjectID := strings.TrimSpace(r.Header.Get("X-Subject-ID"))
 		if subjectID != "" {
 			return subjectID, nil, "legacy_header", ""

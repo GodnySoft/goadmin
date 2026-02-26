@@ -10,6 +10,7 @@
 - Реализован middleware hardening (request_id, timeout, body-size limit).
 - Добавлен OpenAPI контракт и contract tests.
 - Архитектурный вектор обновлен: UI не встраивается в бинарник, React UI разворачивается отдельно.
+- Выполнен базовый load-test API (`/v1/metrics/latest` @ 100 RPS): p95 = `203.57µs`, error rate = `0.0000` (10s, 1000 запросов, 2026-02-26).
 
 ## 2. Scope
 
@@ -81,14 +82,15 @@
 
 ### Нефункциональные
 
-- [ ] p95 latency `GET /metrics/latest` < 250ms.
-- [ ] Поддержка 100 RPS на тестовом стенде без ошибок > 1%.
+- [x] p95 latency `GET /metrics/latest` < 250ms.
+- [x] Поддержка 100 RPS на тестовом стенде без ошибок > 1%.
 
 ### Командные проверки
 
 ```bash
 go test ./internal/transports/web/...
 go test ./... -run TestHTTPContract
+go test ./internal/transports/web -run TestWebLoadMetricsLatest100RPS -count=1 -v
 go test -race ./...
 # Пример smoke
 curl -sS http://127.0.0.1:8080/v1/health

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,22 +37,31 @@ func (p *fakeProvider) Execute(ctx context.Context, cmd string, args []string) (
 }
 
 type fakeStore struct {
+	mu     sync.Mutex
 	latest storage.MetricRecord
 	audit  []storage.AuditEvent
 }
 
 func (s *fakeStore) SaveMetric(ctx context.Context, rec storage.MetricRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.latest = rec
 	return nil
 }
 func (s *fakeStore) SaveAudit(ctx context.Context, ev storage.AuditEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.audit = append(s.audit, ev)
 	return nil
 }
 func (s *fakeStore) LatestMetric(ctx context.Context, module string) (storage.MetricRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.latest, nil
 }
 func (s *fakeStore) QueryAudit(ctx context.Context, q storage.AuditQuery) ([]storage.AuditEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.audit, nil
 }
 func (s *fakeStore) Close() error { return nil }
